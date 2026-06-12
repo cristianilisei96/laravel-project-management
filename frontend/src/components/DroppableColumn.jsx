@@ -1,12 +1,20 @@
 import { Droppable } from '@hello-pangea/dnd';
 import SortableTask from './SortableTask';
 
-export default function DroppableColumn({ column, onAddTask }) {
+export default function DroppableColumn({ column, onAddTask, onDeleteTask, onEditTask, onDeleteColumn }) {
     return (
         <div className="bg-gray-900 rounded-xl p-4 w-72 flex-shrink-0 self-start">
             <div className="flex justify-between items-center mb-4">
                 <h3 className="text-white font-semibold">{column.name}</h3>
-                <span className="text-gray-500 text-xs">{column.tasks.length}</span>
+                <div className="flex items-center gap-2">
+                    <span className="text-gray-500 text-xs">{column.tasks.length}</span>
+                    <button
+                        onClick={() => onDeleteColumn(column.id)}
+                        className="text-gray-600 hover:text-red-400 text-xs transition"
+                    >
+                        ✕
+                    </button>
+                </div>
             </div>
 
             <button
@@ -21,17 +29,21 @@ export default function DroppableColumn({ column, onAddTask }) {
                     <div
                         ref={provided.innerRef}
                         {...provided.droppableProps}
-                        className={`space-y-2 mb-3 min-h-[80px] rounded-lg transition-all ${snapshot.isDraggingOver ? 'bg-indigo-500/10 ring-2 ring-indigo-500' : ''}`}
+                        className={`space-y-2 min-h-[92px] rounded-lg transition-all ${snapshot.isDraggingOver ? 'bg-indigo-500/10 ring-2 ring-indigo-500' : ''}`}
                     >
                         {column.tasks.map((task, index) => (
-                            <SortableTask key={task.id} task={task} index={index} />
+                            <SortableTask
+                                key={task.id}
+                                task={task}
+                                index={index}
+                                onDelete={(taskId) => onDeleteTask(taskId)}
+                                onEdit={(task) => onEditTask(task)}
+                            />
                         ))}
                         {provided.placeholder}
                     </div>
                 )}
             </Droppable>
-
-           
         </div>
     );
 }

@@ -4,12 +4,6 @@ import { DragDropContext } from '@hello-pangea/dnd';
 import api from '../services/api';
 import DroppableColumn from '../components/DroppableColumn';
 
-const priorityColors = {
-    low: 'bg-green-500/20 text-green-400',
-    medium: 'bg-yellow-500/20 text-yellow-400',
-    high: 'bg-red-500/20 text-red-400',
-};
-
 export default function Board() {
     const { id } = useParams();
     const navigate = useNavigate();
@@ -22,6 +16,11 @@ export default function Board() {
     const [taskDescription, setTaskDescription] = useState('');
     const [taskDeadline, setTaskDeadline] = useState('');
     const [taskPriority, setTaskPriority] = useState('medium');
+    const [editingTask, setEditingTask] = useState(null);
+    const [editTitle, setEditTitle] = useState('');
+    const [editDescription, setEditDescription] = useState('');
+    const [editDeadline, setEditDeadline] = useState('');
+    const [editPriority, setEditPriority] = useState('medium');
 
     useEffect(() => {
         api.get(`/boards/${id}`).then(res => setBoard(res.data));
@@ -59,6 +58,42 @@ export default function Board() {
         setShowTaskModal(false);
     };
 
+    const handleDeleteTask = (taskId) => {
+        setBoard(prev => ({
+            ...prev,
+            columns: prev.columns.map(col => ({
+                ...col,
+                tasks: col.tasks.filter(t => t.id !== taskId)
+            }))
+        }));
+    };
+
+    const handleEditOpen = (task) => {
+        setEditingTask(task);
+        setEditTitle(task.title);
+        setEditDescription(task.description || '');
+        setEditDeadline(task.deadline || '');
+        setEditPriority(task.priority);
+    };
+
+    const handleEditSave = async (e) => {
+        e.preventDefault();
+        const res = await api.put(`/tasks/${editingTask.id}`, {
+            title: editTitle,
+            description: editDescription,
+            deadline: editDeadline || null,
+            priority: editPriority,
+        });
+        setBoard(prev => ({
+            ...prev,
+            columns: prev.columns.map(col => ({
+                ...col,
+                tasks: col.tasks.map(t => t.id === editingTask.id ? res.data : t)
+            }))
+        }));
+        setEditingTask(null);
+    };
+
     const handleDragEnd = async (result) => {
         const { source, destination, draggableId } = result;
 
@@ -70,10 +105,8 @@ export default function Board() {
         const taskId = Number(draggableId);
 
         const sourceCol = board.columns.find(c => c.id === sourceColId);
-        const destCol = board.columns.find(c => c.id === destColId);
         const task = sourceCol.tasks.find(t => t.id === taskId);
 
-        // Update UI optimistically
         const newColumns = board.columns.map(col => {
             if (col.id === sourceColId && col.id === destColId) {
                 const newTasks = [...col.tasks];
@@ -100,6 +133,14 @@ export default function Board() {
         });
     };
 
+const handleDeleteColumn = async (columnId) => {
+    await api.delete(`/boards/${id}/columns/${columnId}`);
+    setBoard(prev => ({
+        ...prev,
+        columns: prev.columns.filter(col => col.id !== columnId)
+    }));
+};
+
     if (!board) return (
         <div className="min-h-screen bg-gray-950 flex items-center justify-center">
             <div className="text-white">Loading...</div>
@@ -125,12 +166,15 @@ export default function Board() {
             </nav>
 
             <DragDropContext onDragEnd={handleDragEnd}>
-                <div className="flex gap-4 p-6 overflow-x-auto min-h-[calc(100vh-65px)]">
+                <div className="flex gap-4 p-6 overflow-x-auto min-h-[calc(100vh-65px)] items-start">
                     {board.columns.map(column => (
                         <DroppableColumn
                             key={column.id}
                             column={column}
                             onAddTask={(colId) => { setActiveColumn(colId); setShowTaskModal(true); }}
+                            onDeleteTask={handleDeleteTask}
+                            onEditTask={handleEditOpen}
+                            onDeleteColumn={handleDeleteColumn}
                         />
                     ))}
                     {board.columns.length === 0 && (
@@ -141,6 +185,7 @@ export default function Board() {
                 </div>
             </DragDropContext>
 
+            {/* Add Column Modal */}
             {showColumnModal && (
                 <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
                     <div className="bg-gray-900 rounded-2xl p-6 w-full max-w-md">
@@ -169,6 +214,7 @@ export default function Board() {
                 </div>
             )}
 
+            {/* Add Task Modal */}
             {showTaskModal && (
                 <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
                     <div className="bg-gray-900 rounded-2xl p-6 w-full max-w-md">
@@ -212,6 +258,57 @@ export default function Board() {
                                 <button type="submit"
                                     className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white py-3 rounded-lg transition">
                                     Add Task
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+            {/* Edit Task Modal */}
+            {editingTask && (
+                <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
+                    <div className="bg-gray-900 rounded-2xl p-6 w-full max-w-md">
+                        <h3 className="text-white font-bold text-lg mb-4">Edit Task</h3>
+                        <form onSubmit={handleEditSave} className="space-y-4">
+                            <input
+                                type="text"
+                                value={editTitle}
+                                onChange={e => setEditTitle(e.target.value)}
+                                className="w-full bg-gray-800 text-white rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                placeholder="Task title"
+                                required
+                            />
+                            <textarea
+                                value={editDescription}
+                                onChange={e => setEditDescription(e.target.value)}
+                                className="w-full bg-gray-800 text-white rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                placeholder="Description (optional)"
+                                rows={3}
+                            />
+                            <input
+                                type="date"
+                                value={editDeadline}
+                                onChange={e => setEditDeadline(e.target.value)}
+                                className="w-full bg-gray-800 text-white rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                            />
+                            <select
+                                value={editPriority}
+                                onChange={e => setEditPriority(e.target.value)}
+                                className="w-full bg-gray-800 text-white rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                            >
+                                <option value="low">Low Priority</option>
+                                <option value="medium">Medium Priority</option>
+                                <option value="high">High Priority</option>
+                            </select>
+                            <div className="flex gap-3">
+                                <button type="button" onClick={() => setEditingTask(null)}
+                                    className="flex-1 bg-gray-800 hover:bg-gray-700 text-white py-3 rounded-lg transition">
+                                    Cancel
+                                </button>
+                                <button type="submit"
+                                    className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white py-3 rounded-lg transition">
+                                    Save
                                 </button>
                             </div>
                         </form>
