@@ -1,6 +1,14 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { DragDropContext } from '@hello-pangea/dnd';
 import api from '../services/api';
+import DroppableColumn from '../components/DroppableColumn';
+
+const priorityColors = {
+    low: 'bg-green-500/20 text-green-400',
+    medium: 'bg-yellow-500/20 text-yellow-400',
+    high: 'bg-red-500/20 text-red-400',
+};
 
 export default function Board() {
     const { id } = useParams();
@@ -51,10 +59,45 @@ export default function Board() {
         setShowTaskModal(false);
     };
 
-    const priorityColors = {
-        low: 'bg-green-500/20 text-green-400',
-        medium: 'bg-yellow-500/20 text-yellow-400',
-        high: 'bg-red-500/20 text-red-400',
+    const handleDragEnd = async (result) => {
+        const { source, destination, draggableId } = result;
+
+        if (!destination) return;
+        if (source.droppableId === destination.droppableId && source.index === destination.index) return;
+
+        const sourceColId = Number(source.droppableId);
+        const destColId = Number(destination.droppableId);
+        const taskId = Number(draggableId);
+
+        const sourceCol = board.columns.find(c => c.id === sourceColId);
+        const destCol = board.columns.find(c => c.id === destColId);
+        const task = sourceCol.tasks.find(t => t.id === taskId);
+
+        // Update UI optimistically
+        const newColumns = board.columns.map(col => {
+            if (col.id === sourceColId && col.id === destColId) {
+                const newTasks = [...col.tasks];
+                newTasks.splice(source.index, 1);
+                newTasks.splice(destination.index, 0, task);
+                return { ...col, tasks: newTasks };
+            }
+            if (col.id === sourceColId) {
+                return { ...col, tasks: col.tasks.filter(t => t.id !== taskId) };
+            }
+            if (col.id === destColId) {
+                const newTasks = [...col.tasks];
+                newTasks.splice(destination.index, 0, { ...task, column_id: destColId });
+                return { ...col, tasks: newTasks };
+            }
+            return col;
+        });
+
+        setBoard({ ...board, columns: newColumns });
+
+        await api.patch(`/tasks/${taskId}/move`, {
+            column_id: destColId,
+            order: destination.index,
+        });
     };
 
     if (!board) return (
@@ -65,7 +108,6 @@ export default function Board() {
 
     return (
         <div className="min-h-screen bg-gray-950">
-            {/* Navbar */}
             <nav className="bg-gray-900 border-b border-gray-800 px-6 py-4 flex justify-between items-center">
                 <div className="flex items-center gap-3">
                     <button onClick={() => navigate('/dashboard')} className="text-gray-400 hover:text-white transition">
@@ -82,52 +124,23 @@ export default function Board() {
                 </button>
             </nav>
 
-            {/* Columns */}
-            <div className="flex gap-4 p-6 overflow-x-auto min-h-[calc(100vh-65px)]">
-                {board.columns.map(column => (
-                    <div key={column.id} className="bg-gray-900 rounded-xl p-4 w-72 flex-shrink-0">
-                        <div className="flex justify-between items-center mb-4">
-                            <h3 className="text-white font-semibold">{column.name}</h3>
-                            <span className="text-gray-500 text-xs">{column.tasks.length}</span>
+            <DragDropContext onDragEnd={handleDragEnd}>
+                <div className="flex gap-4 p-6 overflow-x-auto min-h-[calc(100vh-65px)]">
+                    {board.columns.map(column => (
+                        <DroppableColumn
+                            key={column.id}
+                            column={column}
+                            onAddTask={(colId) => { setActiveColumn(colId); setShowTaskModal(true); }}
+                        />
+                    ))}
+                    {board.columns.length === 0 && (
+                        <div className="flex items-center justify-center w-full">
+                            <p className="text-gray-500">No columns yet. Add your first column!</p>
                         </div>
+                    )}
+                </div>
+            </DragDropContext>
 
-                        {/* Tasks */}
-                        <div className="space-y-2 mb-3">
-                            {column.tasks.map(task => (
-                                <div key={task.id} className="bg-gray-800 rounded-lg p-3">
-                                    <p className="text-white text-sm font-medium">{task.title}</p>
-                                    {task.description && (
-                                        <p className="text-gray-400 text-xs mt-1">{task.description}</p>
-                                    )}
-                                    <div className="flex items-center gap-2 mt-2">
-                                        <span className={`text-xs px-2 py-0.5 rounded-full ${priorityColors[task.priority]}`}>
-                                            {task.priority}
-                                        </span>
-                                        {task.deadline && (
-                                            <span className="text-gray-500 text-xs">📅 {task.deadline}</span>
-                                        )}
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-
-                        <button
-                            onClick={() => { setActiveColumn(column.id); setShowTaskModal(true); }}
-                            className="w-full text-gray-500 hover:text-gray-300 text-sm py-2 hover:bg-gray-800 rounded-lg transition"
-                        >
-                            + Add Task
-                        </button>
-                    </div>
-                ))}
-
-                {board.columns.length === 0 && (
-                    <div className="flex items-center justify-center w-full">
-                        <p className="text-gray-500">No columns yet. Add your first column!</p>
-                    </div>
-                )}
-            </div>
-
-            {/* Column Modal */}
             {showColumnModal && (
                 <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
                     <div className="bg-gray-900 rounded-2xl p-6 w-full max-w-md">
@@ -156,7 +169,6 @@ export default function Board() {
                 </div>
             )}
 
-            {/* Task Modal */}
             {showTaskModal && (
                 <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
                     <div className="bg-gray-900 rounded-2xl p-6 w-full max-w-md">
