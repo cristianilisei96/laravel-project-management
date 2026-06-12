@@ -28,7 +28,9 @@ class BoardController extends Controller
 
     public function show(Request $request, Board $board)
     {
-        $this->authorize('view', $board);
+        if ($request->user()->id !== $board->user_id) {
+            return response()->json(['message' => 'Forbidden'], 403);
+        }
 
         $board->load(['columns.tasks.assignedUser']);
         return response()->json($board);
@@ -36,7 +38,9 @@ class BoardController extends Controller
 
     public function update(Request $request, Board $board)
     {
-        $this->authorize('update', $board);
+        if ($request->user()->id !== $board->user_id) {
+            return response()->json(['message' => 'Forbidden'], 403);
+        }
 
         $request->validate([
             'name' => 'sometimes|required|string|max:255',
@@ -50,7 +54,10 @@ class BoardController extends Controller
 
     public function destroy(Request $request, Board $board)
     {
-        $this->authorize('delete', $board);
+        if ($request->user()->id !== $board->user_id) {
+            return response()->json(['message' => 'Forbidden'], 403);
+        }
+
         $board->delete();
         return response()->json(['message' => 'Board deleted']);
     }

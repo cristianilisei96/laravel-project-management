@@ -9,15 +9,19 @@ use Illuminate\Http\Request;
 
 class ColumnController extends Controller
 {
-    public function index(Board $board)
+    public function index(Request $request, Board $board)
     {
-        $this->authorize('view', $board);
+        if ($request->user()->id !== $board->user_id) {
+            return response()->json(['message' => 'Forbidden'], 403);
+        }
         return response()->json($board->columns()->with('tasks')->get());
     }
 
     public function store(Request $request, Board $board)
     {
-        $this->authorize('update', $board);
+        if ($request->user()->id !== $board->user_id) {
+            return response()->json(['message' => 'Forbidden'], 403);
+        }
 
         $request->validate([
             'name' => 'required|string|max:255',
@@ -34,7 +38,9 @@ class ColumnController extends Controller
 
     public function update(Request $request, Board $board, Column $column)
     {
-        $this->authorize('update', $board);
+        if ($request->user()->id !== $board->user_id) {
+            return response()->json(['message' => 'Forbidden'], 403);
+        }
 
         $request->validate([
             'name' => 'sometimes|required|string|max:255',
@@ -45,9 +51,12 @@ class ColumnController extends Controller
         return response()->json($column);
     }
 
-    public function destroy(Board $board, Column $column)
+    public function destroy(Request $request, Board $board, Column $column)
     {
-        $this->authorize('update', $board);
+        if ($request->user()->id !== $board->user_id) {
+            return response()->json(['message' => 'Forbidden'], 403);
+        }
+
         $column->delete();
         return response()->json(['message' => 'Column deleted']);
     }
